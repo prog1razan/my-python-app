@@ -1,28 +1,43 @@
-name: Deploy FastAPI App
+name: Python App CI/CD Pipeline with Direct Deployment
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Login to Azure
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          echo "Run tests"
+
+      - name: Azure Login
         uses: azure/login@v2
         with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Update Application on VM
+      - name: Deploy to Azure VM
         run: |
-          az vm run-command invoke \
-            --resource-group CICD \
-            --name MyVM \
-            --command-id RunShellScript \
-            --scripts "cd /home/azureuser/my-python-app && ./update_app.sh"
+          az vm extension set \
+            --resource-group ${{ secrets.RESOURCE_GROUP }} \
+            --vm-name ${{ secrets.VM_NAME }} \
+            --name CustomScript \
+            --force-update \
+            --publisher Microsoft.Azure.Extensions \
+            --settings '{"commandToExecute": "bash /home/azureuser/my-python-app/update_app.sh"}'
